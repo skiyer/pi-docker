@@ -5,8 +5,9 @@ name: Build Pi image
 #  2) 手动触发（可指定版本）
 #  3) Dockerfile / 本工作流变更时构建当前最新版本
 on:
+  # 兜底：每天云端跑一次，防止 Dependabot 漏掉（正常情况下由 Dependabot PR 合并后触发）
   schedule:
-    - cron: "17 2,10,18 * * *"
+    - cron: "17 2 * * *"
   workflow_dispatch:
     inputs:
       version:
@@ -17,6 +18,7 @@ on:
     branches: [main]
     paths:
       - Dockerfile
+      - package.json          # Dependabot 升级 package.json 后合并 → 触发构建
       - .github/workflows/build.yml
 
 permissions:
@@ -47,9 +49,18 @@ jobs:
         name: 查询 npm 最新版并与 GHCR 比对
         run: |
           set -euo pipefail
-          want="${{ inputs.version }}"
           latest="$(npm view "$UPSTREAM" version)"
-          [ -z "$want" ] && want="$latest"
+          want="${{ inputs.version }}"
+          if [ -z "$want" ]; then
+            case "${{ github.event_name }}" in
+              schedule)
+                # 兜底：定时任务直接用 npm 最新版
+                want="$latest" ;;
+              *)
+                # push / PR 校验：以 package.json 为准（Dependabot 维护它，保证构建版本确定可复现）
+                want="$(jq -r '.dependencies["@earendil-works/pi-coding-agent"]' package.json | tr -d '^~')" ;;
+            esac
+          fi
           echo "version=$want" >> "$GITHUB_OUTPUT"
           [ "$want" = "$latest" ] && echo "is_latest=true" >> "$GITHUB_OUTPUT" || echo "is_latest=false" >> "$GITHUB_OUTPUT"
           if docker manifest inspect "$IMAGE:$want" >/dev/null 2>&1; then

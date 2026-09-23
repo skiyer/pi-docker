@@ -1,0 +1,48 @@
+name: Auto-merge dependency PRs
+
+# 方案 A：Dependabot 发现上游新版本 → 开 PR → 本工作流校验并自动合并（由 GitHub 执行合并，
+# 因此合并后的 push 会正常触发 build.yml 构建镜像）。
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  validate:
+    name: 校验版本可用
+    if: >-
+      github.actor == 'dependabot[bot]' ||
+      contains(github.event.pull_request.labels.*.name, 'automerge')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: 读取目标版本并确认 npm 上存在
+        id: v
+        run: |
+          set -euo pipefail
+          v="$(jq -r '.dependencies["@earendil-works/pi-coding-agent"]' package.json | tr -d '^~')"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          npm view "@earendil-works/pi-coding-agent@$v" version
+
+      - name: 用该版本构建一次（单架构、不推送）验证 Dockerfile 可用
+        run: |
+          set -euo pipefail
+          docker build --build-arg "PI_VERSION=${{ steps.v.outputs.version }}" -t pi-docker:pr-validate .
+          docker run --rm pi-docker:pr-validate --version
+
+  merge:
+    name: 自动合并
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: 开启 auto-merge（squash）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR"

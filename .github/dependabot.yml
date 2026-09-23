@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # 上游 Pi 一发布新版本，这里就会自动开 PR（事件驱动的源头）
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "03:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore"
+      include: scope
+    labels:
+      - dependencies
+      - automerge
+    groups:
+      pi:
+        patterns:
+          - "@earendil-works/pi-coding-agent"
