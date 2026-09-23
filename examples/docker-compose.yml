@@ -1,0 +1,21 @@
+# 用法：docker compose up -d --build
+# 首次运行需要在容器内登录/配置：docker compose exec pi pi
+services:
+  pi:
+    build:
+      context: ..
+      args:
+        PI_VERSION: latest      # 也可固定版本，如 0.87.1
+    image: pi-docker:local
+    container_name: pi
+    working_dir: /workspace
+    # 你的代码目录挂到 /workspace；Pi 的配置/凭据挂在 /root/.pi（容器以 root 运行）
+    volumes:
+      - ${PWD}/workspace:/workspace
+      - pi-config:/root/.pi
+    stdin_open: true
+    tty: true
+    command: ["--help"]
+
+volumes:
+  pi-config:

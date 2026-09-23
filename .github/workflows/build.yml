@@ -1,0 +1,118 @@
+name: Build Pi image
+
+# 触发方式：
+#  1) 定时（每天 3 次）检查 npm 上 @earendil-works/pi-coding-agent 的最新版本，有新版本才构建
+#  2) 手动触发（可指定版本）
+#  3) Dockerfile / 本工作流变更时构建当前最新版本
+on:
+  schedule:
+    - cron: "17 2,10,18 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要构建的 Pi 版本（留空=使用 npm 最新版）"
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .github/workflows/build.yml
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  UPSTREAM: "@earendil-works/pi-coding-agent"
+  IMAGE: ghcr.io/${{ github.repository_owner }}/pi-docker
+
+jobs:
+  resolve:
+    name: 解析版本并检查是否已构建
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      is_latest: ${{ steps.check.outputs.is_latest }}
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - name: 登录 GHCR（用于查询已有 tag）
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: check
+        name: 查询 npm 最新版并与 GHCR 比对
+        run: |
+          set -euo pipefail
+          want="${{ inputs.version }}"
+          latest="$(npm view "$UPSTREAM" version)"
+          [ -z "$want" ] && want="$latest"
+          echo "version=$want" >> "$GITHUB_OUTPUT"
+          [ "$want" = "$latest" ] && echo "is_latest=true" >> "$GITHUB_OUTPUT" || echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          if docker manifest inspect "$IMAGE:$want" >/dev/null 2>&1; then
+            echo "  $IMAGE:$want 已存在，跳过构建"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "  需要构建 $IMAGE:$want（npm latest=$latest）"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: 构建并推送多架构镜像
+    needs: resolve
+    if: needs.resolve.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 组装 tags
+        id: tags
+        run: |
+          set -euo pipefail
+          v="${{ needs.resolve.outputs.version }}"
+          tags="$IMAGE:$v"
+          if [ "${{ needs.resolve.outputs.is_latest }}" = "true" ]; then
+            tags="$tags"$'\n'"$IMAGE:latest"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 构建并推送
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            PI_VERSION=${{ needs.resolve.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: 输出摘要
+        run: |
+          {
+            echo "### 已构建 Pi 镜像"
+            echo ""
+            echo "- 版本：\`${{ needs.resolve.outputs.version }}\`"
+            echo "- 平台：linux/amd64, linux/arm64"
+            echo "- 拉取：\`docker pull $IMAGE:${{ needs.resolve.outputs.version }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
