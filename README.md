@@ -13,18 +13,20 @@ ghcr.io/skiyer/pi-docker:latest     # 跟随 npm 最新版
 - 基础镜像：`node:24-bookworm-slim`
 - 含工具：bash、ca-certificates、git、ripgrep、curl、jq、procps
 
-## 自动构建流程
+## 自动构建流程（事件驱动）
 
-`.github/workflows/build.yml` 每天 3 次（UTC 02:17 / 10:17 / 18:17）执行：
+`package.json` 里固定的 `@earendil-works/pi-coding-agent` 版本是**唯一真相源**：
 
-1. 查询 npm 上 `@earendil-works/pi-coding-agent` 的最新版本；
-2. 检查 GHCR 里是否已有该版本镜像（`docker manifest inspect`）；
-3. 只有**不存在**时才构建多架构镜像并推送 `:<版本>`（若该版本是 npm `latest`，同时更新 `:latest`）。
+1. **上游发新版** → Dependabot 自动开 PR（`chore(deps): bump ...`，带 `automerge` 标签）
+2. **`Auto-merge dependency PRs` 工作流**：校验该版本在 npm 上存在，并用它单架构试构建 + 跑 `pi --version`
+3. 校验通过 → **自动 squash 合并**；合并后直接**以可复用工作流调用** `build.yml` 构建多架构镜像并推送 `:<版本>`（是 npm `latest` 时同时更新 `:latest`）
+4. 若 GHCR 已存在该标签则跳过构建（幂等）
 
-也支持：
+其它入口：
 
-- **手动触发**：Actions → Build Pi image → Run workflow，可填指定版本（例如回构建旧版本）。
-- **推送到 main 且改动了 `Dockerfile`/工作流**：构建当前最新版。
+- **手动触发**：Actions → Build Pi image → Run workflow。可指定版本；勾选 `force` 可在 Dockerfile 变更后用同一版本强制重建。
+- **每日兜底**：`cron: 17 2 * * *`，万一 Dependabot 未触发也会检查 npm 最新版并构建。
+- **推送 main 改动 `Dockerfile`/`package.json`/工作流**：按 `package.json` 的版本构建。
 
 ## 使用
 
