@@ -16,7 +16,8 @@ LABEL org.opencontainers.image.title="pi-coding-agent" \
 # 运行 Pi 所需的工具：bash、证书、git、ripgrep（搜索），另加 curl/jq 方便脚本化
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        bash ca-certificates git ripgrep curl jq procps \
+        bash ca-certificates git ripgrep fd-find curl jq procps \
+    && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}" \

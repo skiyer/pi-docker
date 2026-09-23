@@ -37,12 +37,26 @@ jobs:
           docker run --rm pi-docker:pr-validate --version
 
   merge:
-    name: 自动合并
+    name: 合并 PR
     needs: validate
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.validate.outputs.version }}
     steps:
-      - name: 开启 auto-merge（squash）
+      - name: 合并（squash）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR"
+        run: gh pr merge --squash "$PR"
+
+  # 说明：用 GITHUB_TOKEN 合并产生的 push 不会再触发其他工作流（GitHub 的递归保护），
+  # 因此这里直接以可复用工作流的方式调用构建，保证"发版即出镜像"。
+  build:
+    name: 触发镜像构建
+    needs: [validate, merge]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
