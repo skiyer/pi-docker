@@ -4,6 +4,6 @@
   "private": true,
   "description": "Docker image build for Pi coding agent. The dependency version below is the single source of truth for the image version built by CI.",
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "0.87.1"
+    "@earendil-works/pi-coding-agent": "0.86.0"
   }
 }
