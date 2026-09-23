@@ -13,10 +13,10 @@ LABEL org.opencontainers.image.title="pi-coding-agent" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${PI_VERSION}"
 
-# 运行 Pi 所需的工具：bash、证书、git、ripgrep（搜索），另加 curl/jq 方便脚本化
+# 只装 Pi 运行时真正需要的：bash、证书、git、ripgrep（搜索结果）、fd（文件查找，Pi 会调用）
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        bash ca-certificates git ripgrep fd-find curl jq procps \
+        bash ca-certificates git ripgrep fd-find \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && rm -rf /var/lib/apt/lists/*
 
