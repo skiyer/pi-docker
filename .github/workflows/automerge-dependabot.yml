@@ -10,6 +10,11 @@ permissions:
   contents: write
   pull-requests: write
 
+# 同一个 PR 只跑一次（opened 与 labeled 会同时触发，否则合并步骤会互相踩）
+concurrency:
+  group: automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     name: 校验版本可用
@@ -43,11 +48,22 @@ jobs:
     outputs:
       version: ${{ needs.validate.outputs.version }}
     steps:
-      - name: 合并（squash）
+      - name: 合并（squash，幂等）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --squash "$PR"
+        run: |
+          set -euo pipefail
+          state="$(gh pr view "$PR" --json state --jq .state)"
+          if [ "$state" = "MERGED" ]; then
+            echo "PR 已合并，跳过"; exit 0
+          fi
+          if ! gh pr merge --squash "$PR"; then
+            # 并发合并时 GitHub 会返回 merge already in progress；确认最终状态后放行
+            final="$(gh pr view "$PR" --json state --jq .state)"
+            [ "$final" = "MERGED" ] || { echo "合并失败（state=$final）"; exit 1; }
+            echo "并发合并已由另一个运行完成"
+          fi
 
   # 说明：用 GITHUB_TOKEN 合并产生的 push 不会再触发其他工作流（GitHub 的递归保护），
   # 因此这里直接以可复用工作流的方式调用构建，保证"发版即出镜像"。
