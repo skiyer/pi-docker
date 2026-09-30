@@ -22,11 +22,11 @@ ghcr.io/skiyer/pi-docker:latest     # 跟随 npm 最新版
 3. 校验通过 → **自动 squash 合并**；合并后直接**以可复用工作流调用** `build.yml` 构建多架构镜像并推送 `:<版本>`（是 npm `latest` 时同时更新 `:latest`）
 4. 若 GHCR 已存在该标签则跳过构建（幂等）
 
-其它入口：
+说明：**没有定时兜底**。构建只由以下三种情况触发（Dependabot 对新版本有默认冷却期，冷却结束才会开 PR）：
 
 - **手动触发**：Actions → Build Pi image → Run workflow。可指定版本；勾选 `force` 可在 Dockerfile 变更后用同一版本强制重建。
-- **每日兜底**：`cron: 17 2 * * *`，万一 Dependabot 未触发也会检查 npm 最新版并构建。
 - **推送 main 改动 `Dockerfile`/`package.json`/工作流**：按 `package.json` 的版本构建。
+- **Dependabot 合并**：由 `automerge-dependabot.yml` 以可复用工作流调用本工作流。
 
 ## 使用
 
