@@ -8,6 +8,10 @@ updates:
       time: "03:00"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 3
+    # 关闭默认冷却（默认对新版本等 3 天才提 PR），让上游发版后尽快出镜像；
+    # 如需恢复供应链缓冲，删掉这段即可。
+    cooldown:
+      default-days: 0
     commit-message:
       prefix: "chore"
       include: scope
