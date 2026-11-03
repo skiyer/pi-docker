@@ -62,7 +62,9 @@ jobs:
           latest="$(npm view "$UPSTREAM" version)"
           want="${{ inputs.version }}"
           # 以 package.json 为准（Dependabot 维护，构建版本确定可复现）
-          [ -z "$want" ] && want="$(jq -r '.dependencies["@earendil-works/pi-coding-agent"]' package.json | tr -d '^~')
+          if [ -z "$want" ]; then
+            want="$(jq -r '.dependencies["@earendil-works/pi-coding-agent"]' package.json | tr -d '^~')"
+          fi
 
           echo "version=$want" >> "$GITHUB_OUTPUT"
           [ "$want" = "$latest" ] && echo "is_latest=true" >> "$GITHUB_OUTPUT" || echo "is_latest=false" >> "$GITHUB_OUTPUT"
